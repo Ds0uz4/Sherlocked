@@ -20,17 +20,22 @@ class MegaWorldEnv:
         self.start = (1, 1)
         self.goal = (18, 18)
 
+        # 1. NEW MAZE STRUCTURE
         self.walls = self._generate_walls()
+        
+        # 2. Hazards
         self.ice = [(5,y) for y in range(5,15)] + [(15,y) for y in range(5,15)]
         self.mud = [(x,10) for x in range(2,18)]
+        
+        # Traps (Randomized locations)
         self.traps = [(3,3),(8,8),(12,12),(17,17),(9,10),(11,10)]
         random.shuffle(self.traps)
 
-        # 1. REMOVED TOP LEFT CHARGER (2,18)
+        # Chargers
         self.chargers = [(18,2),(10,10)] 
         
-        # 2. DESIGNATED MOVEMENT FOR HUNTERS
-        # We add a 'path_index' to track their designated square movement
+        # Enemies
+        # We ensure they spawn in valid locations for the new map
         self.enemies = [
             {"pos":[5,5],"type":"patrol","axis":"x","range":(5,10),"dir":1},
             {"pos":[15,5],"type":"patrol","axis":"x","range":(12,17),"dir":1},
@@ -40,12 +45,40 @@ class MegaWorldEnv:
         random.shuffle(self.enemies)
 
     def _generate_walls(self):
-        walls=[]
-        for i in range(20):
-            if i%4==0:
-                for j in range(5,15):
-                    walls.append((i,j))
-        walls += [(6,6),(7,7),(13,13),(14,14)]
+        """
+        New Layout: 'The Fortress'
+        A 4-chamber maze with central walls and narrow choke points.
+        """
+        walls = []
+        
+        # --- 1. The Great Cross (Divides map into 4 quadrants) ---
+        # Vertical central wall (x=9)
+        for y in range(20):
+            if y not in [3, 16]: # Gaps at y=3 and y=16
+                walls.append((9, y))
+                
+        # Horizontal central wall (y=9)
+        for x in range(20):
+            if x not in [3, 16]: # Gaps at x=3 and x=16
+                walls.append((x, 9))
+
+        # --- 2. Quadrant Obstacles (Clutter) ---
+        # Top-Left Room (Start Zone)
+        walls.extend([(4,4), (4,5), (4,6), (5,4), (6,4)])
+        
+        # Top-Right Room (Patrol Zone)
+        walls.extend([(14,4), (14,5), (14,6), (15,4), (16,4)])
+        
+        # Bottom-Left Room (Mud Zone)
+        walls.extend([(4,14), (4,15), (4,16), (5,14), (6,14)])
+        
+        # Bottom-Right Room (Goal Zone) - The 'Bunker'
+        # Protective casing around the goal area to force specific entry
+        for i in range(15, 19):
+            walls.append((i, 15)) # Bar above goal area
+            
+        walls.extend([(14,14), (13,13)]) # Extra clutter
+        
         return walls
 
     def shaped_reward(self, old_pos, new_pos):
@@ -75,15 +108,23 @@ class MegaWorldEnv:
         for e in self.enemies:
             if e["type"]=="patrol":
                 e["pos"][0]+=e["dir"]
-                if e["pos"][0]>=e["range"][1] or e["pos"][0]<=e["range"][0]:
+                # Basic bounce check against walls/map edge
+                nx = e["pos"][0]
+                if nx>=e["range"][1] or nx<=e["range"][0] or (nx, e["pos"][1]) in self.walls:
                     e["dir"]*=-1
+                    e["pos"][0]+=e["dir"] # Step back
             else:
-                # DESIGNATED MOVEMENT: Move in a 3x3 square pattern
-                # sequence: Right, Up, Left, Down
+                # DESIGNATED MOVEMENT: Square Patrol
                 path = [(1,0), (1,0), (0,1), (0,1), (-1,0), (-1,0), (0,-1), (0,-1)]
                 move = path[e["step"] % len(path)]
-                e["pos"][0] += move[0]
-                e["pos"][1] += move[1]
+                
+                nx, ny = e["pos"][0] + move[0], e["pos"][1] + move[1]
+                
+                # Only move if not hitting a wall (simple collision check)
+                if (nx, ny) not in self.walls and 0<=nx<20 and 0<=ny<20:
+                    e["pos"][0] = nx
+                    e["pos"][1] = ny
+                    
                 e["step"] += 1
 
     def render(self, player_pos, history, battery, score):
@@ -95,7 +136,7 @@ class MegaWorldEnv:
             for x in range(20):
                 pos=(x,y)
                 color="#111"; char=""
-                if pos in self.walls: color="#555"
+                if pos in self.walls: color="#555" # Grey Walls
                 elif pos in self.ice: color="#29b6f6"
                 elif pos in self.mud: color="#4e342e"
                 elif pos in history: color="#263238"
@@ -109,8 +150,6 @@ class MegaWorldEnv:
         html+="</div></div>"
         return html
 
-# ... [Rest of the simulation and Gradio code remains the same] ...
-
 def run_mega_simulation(file):
     env=MegaWorldEnv()
     if file is None:
@@ -122,7 +161,7 @@ def run_mega_simulation(file):
     spec.loader.exec_module(agent)
 
     pos=list(env.start)
-    battery=100
+    battery=2000
     score=0
     history=[]
 
@@ -153,7 +192,7 @@ def run_mega_simulation(file):
         if battery<=0 or tuple(pos) in [tuple(e["pos"]) for e in env.enemies]:
             reward-=20; done=True
         if tuple(pos)==env.goal:
-            reward+=10000; done=True
+            reward+=1000; done=True
 
         reward=max(reward,-10)
         score+=reward
@@ -167,7 +206,7 @@ def run_mega_simulation(file):
         time.sleep(0.05)
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Super RL World — UPDATED CONFIGURATION")
+    gr.Markdown("# Super RL World — FORTRESS EDITION")
     with gr.Row():
         game=gr.HTML(MegaWorldEnv().render((1,1),[],100,0))
         with gr.Column():
