@@ -9,13 +9,9 @@ import zipfile
 import tempfile
 import uuid
 
-# --- PASTE THE FULL MegaWorldEnv CLASS HERE ---
-# (Reuse the class code from previous turns or the game_env.py above)
-# Ensure the .render() method is the full HTML version from your FIRST prompt.
-# ----------------------------------------------
-
-# --- COPY OF MegaWorldEnv CLASS FOR CONTEXT ---
+# --- MEGA WORLD CLASS (SERVER VERSION) ---
 RADAR_ENCODING = {"EMPTY": 0,"WALL": 1,"GOAL": 2,"ICE": 3,"MUD": 4,"DANGER": 5,"CHARGER": 6,"ENEMY": 7}
+
 class MegaWorldEnv:
     def __init__(self):
         self.start = (1, 1); self.goal = (18, 18)
@@ -26,6 +22,7 @@ class MegaWorldEnv:
         self.chargers = [(18,2),(10,10)]
         self.enemies = [{"pos":[5,5],"type":"patrol","axis":"x","range":(5,10),"dir":1},{"pos":[15,5],"type":"patrol","axis":"x","range":(12,17),"dir":1},{"pos":[12,12],"type":"hunter", "step": 0}, {"pos":[16,16],"type":"hunter", "step": 0}]
         random.shuffle(self.enemies)
+
     def _generate_walls(self):
         walls = []
         for y in range(20): 
@@ -36,8 +33,13 @@ class MegaWorldEnv:
         for i in range(15, 19): walls.append((i, 15))
         walls.extend([(14,14), (13,13)])
         return walls
+
+    # *** ENABLED SHAPED REWARD HERE ***
     def shaped_reward(self, old_pos, new_pos):
-        return 0 # Not needed for evaluation
+        old_dist = abs(old_pos[0]-self.goal[0]) + abs(old_pos[1]-self.goal[1])
+        new_dist = abs(new_pos[0]-self.goal[0]) + abs(new_pos[1]-self.goal[1])
+        return 3.0 * (old_dist - new_dist)
+
     def get_radar(self, pos):
         x,y=pos; radar={}
         dirs={"up":(x,y+1),"down":(x,y-1),"left":(x-1,y),"right":(x+1,y)}
@@ -54,6 +56,7 @@ class MegaWorldEnv:
                 if tuple(e["pos"])==(nx,ny): info="ENEMY"
             radar[d]=RADAR_ENCODING[info]
         return radar
+
     def update_enemies(self, player_pos):
         for e in self.enemies:
             if e["type"]=="patrol":
@@ -66,9 +69,11 @@ class MegaWorldEnv:
                 nx, ny = e["pos"][0] + move[0], e["pos"][1] + move[1]
                 if (nx, ny) not in self.walls and 0<=nx<20 and 0<=ny<20: e["pos"]=[nx,ny]
                 e["step"] += 1
+
     def render(self, player_pos, history, battery, score):
+        # HTML Visualizer
         html="<div style='background:#000;padding:10px;border-radius:12px;font-family:monospace'>"
-        html+=f"<div style='color:white;margin-bottom:5px'>🔋 {battery} | 🏆 {score}</div>"
+        html+=f"<div style='color:white;margin-bottom:5px'>🔋 {battery} | 🏆 {score:.1f}</div>" # Added .1f for float formatting
         html+="<div style='display:grid;grid-template-columns:repeat(20,20px);gap:1px;width:fit-content;margin:auto'>"
         enemy_pos=[tuple(e["pos"]) for e in self.enemies]
         for y in range(19,-1,-1):
@@ -89,7 +94,7 @@ class MegaWorldEnv:
 # ---------------------------------------------------------
 # SERVER CONFIG
 # ---------------------------------------------------------
-FLAG = "CTF{y0u_h4v3_m4st3r3d_th3_m4z3}"
+FLAG = "CTF{r3w4rd_sh4p1ng_1s_th3_k3y}"
 
 def run_mega_simulation(zip_file):
     env = MegaWorldEnv()
@@ -98,28 +103,26 @@ def run_mega_simulation(zip_file):
         yield env.render(env.start, [], 100, 0), {"status": "Waiting for upload..."}
         return
 
-    # 1. Create a unique temp directory for this run
+    # Setup Temp Directory
     run_id = str(uuid.uuid4())
     temp_dir = os.path.join(tempfile.gettempdir(), "ctf_run_" + run_id)
     os.makedirs(temp_dir, exist_ok=True)
 
     try:
-        # 2. Extract Zip
+        # Extract Zip
         try:
             with zipfile.ZipFile(zip_file.name, 'r') as zip_ref:
                 zip_ref.extractall(temp_dir)
         except Exception as e:
-            yield env.render(env.start, [], 0, 0), {"error": f"Invalid Zip File: {e}"}
+            yield env.render(env.start, [], 0, 0), {"error": f"Invalid Zip: {e}"}
             return
 
-        # 3. Locate agent.py
+        # Load Agent
         agent_path = os.path.join(temp_dir, "agent.py")
         if not os.path.exists(agent_path):
-            yield env.render(env.start, [], 0, 0), {"error": "agent.py not found in zip root!"}
+            yield env.render(env.start, [], 0, 0), {"error": "agent.py not found!"}
             return
 
-        # 4. Dynamic Import with Path Handling
-        # We append temp_dir to sys.path so the agent can 'import brain.pkl' from its own folder
         sys.path.append(temp_dir)
         
         try:
@@ -127,10 +130,10 @@ def run_mega_simulation(zip_file):
             agent = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(agent)
         except Exception as e:
-            yield env.render(env.start, [], 0, 0), {"error": f"Code Error in agent.py: {e}"}
+            yield env.render(env.start, [], 0, 0), {"error": f"Code Error: {e}"}
             return
 
-        # 5. Run Simulation
+        # Run Simulation
         pos = list(env.start)
         battery = 2500
         score = 0
@@ -140,7 +143,6 @@ def run_mega_simulation(zip_file):
             radar = env.get_radar(pos)
             
             try:
-                # Capture STDOUT/STDERR could be added here to prevent log spam
                 action = agent.get_action(tuple(pos), radar, battery)
                 if action not in [0, 1, 2, 3]: action = 0
             except Exception as e:
@@ -151,20 +153,28 @@ def run_mega_simulation(zip_file):
             prev_pos = pos[:]
             nx, ny = pos[0]+dx, pos[1]+dy
             
+            # Wall Collision
             if not (0 <= nx < 20 and 0 <= ny < 20) or (nx, ny) in env.walls:
                 nx, ny = pos
             pos = [nx, ny]
+
+            # *** APPLY SHAPED REWARD ***
+            # This updates the score visible on screen
+            step_reward = env.shaped_reward(tuple(prev_pos), tuple(pos))
+            score += step_reward
 
             env.update_enemies(pos)
             history.append(tuple(pos))
             battery -= 1
             if tuple(pos) in env.mud: battery -= 5
             
-            # Checks
+            # Win
             if tuple(pos) == env.goal:
-                yield env.render(tuple(pos), history, battery, score+1000), {"RESULT": f"VICTORY! {FLAG}"}
+                score += 1000
+                yield env.render(tuple(pos), history, battery, score), {"RESULT": f"VICTORY! {FLAG}"}
                 break
             
+            # Loss
             enemy_pos = [tuple(e["pos"]) for e in env.enemies]
             if battery <= 0:
                 yield env.render(tuple(pos), history, 0, score), {"RESULT": "DIED: Battery Empty"}
@@ -173,30 +183,26 @@ def run_mega_simulation(zip_file):
                 yield env.render(tuple(pos), history, 0, score), {"RESULT": "DIED: Caught by Enemy"}
                 break
             if tuple(pos) in env.traps:
-                battery -= 10 # Trap penalty
+                battery -= 10 
 
+            # Render
             yield env.render(tuple(pos), history, battery, score), {"step": step}
-            time.sleep(0.01) # Fast playback
+            time.sleep(0.01)
 
     finally:
-        # 6. Cleanup
-        # Remove temp dir from path and filesystem
         if temp_dir in sys.path:
             sys.path.remove(temp_dir)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-# --- GRADIO INTERFACE ---
 with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
-    gr.Markdown("# 🚩 CTF: The Maze Runner")
-    gr.Markdown("Upload a **ZIP file** containing your `agent.py` (and `brain.pkl` if needed).")
-    
+    gr.Markdown("# 🚩 CTF: The Fortress Run")
+    gr.Markdown("Upload `solution.zip` to run your agent.")
     with gr.Row():
         game = gr.HTML(MegaWorldEnv().render((1,1), [], 100, 0))
         with gr.Column():
             file_input = gr.File(label="Upload Submission (.zip)", file_types=[".zip"])
             run_btn = gr.Button("Deploy Agent", variant="primary")
-            logs = gr.JSON(label="System Status")
-            
+            logs = gr.JSON(label="Status")
     run_btn.click(run_mega_simulation, file_input, [game, logs])
 
 if __name__ == "__main__":
