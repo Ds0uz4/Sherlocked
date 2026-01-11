@@ -26,12 +26,16 @@ class MegaWorldEnv:
         self.traps = [(3,3),(8,8),(12,12),(17,17),(9,10),(11,10)]
         random.shuffle(self.traps)
 
-        self.chargers = [(2,18),(18,2),(10,10)]
+        # 1. REMOVED TOP LEFT CHARGER (2,18)
+        self.chargers = [(18,2),(10,10)] 
+        
+        # 2. DESIGNATED MOVEMENT FOR HUNTERS
+        # We add a 'path_index' to track their designated square movement
         self.enemies = [
             {"pos":[5,5],"type":"patrol","axis":"x","range":(5,10),"dir":1},
             {"pos":[15,5],"type":"patrol","axis":"x","range":(12,17),"dir":1},
-            {"pos":[12,12],"type":"hunter"},
-            {"pos":[16,16],"type":"hunter"}
+            {"pos":[12,12],"type":"hunter", "step": 0}, 
+            {"pos":[16,16],"type":"hunter", "step": 0}
         ]
         random.shuffle(self.enemies)
 
@@ -44,7 +48,6 @@ class MegaWorldEnv:
         walls += [(6,6),(7,7),(13,13),(14,14)]
         return walls
 
-    # 🔑 STRONG SHAPING
     def shaped_reward(self, old_pos, new_pos):
         old_d = abs(old_pos[0]-self.goal[0]) + abs(old_pos[1]-self.goal[1])
         new_d = abs(new_pos[0]-self.goal[0]) + abs(new_pos[1]-self.goal[1])
@@ -75,12 +78,13 @@ class MegaWorldEnv:
                 if e["pos"][0]>=e["range"][1] or e["pos"][0]<=e["range"][0]:
                     e["dir"]*=-1
             else:
-                d=abs(e["pos"][0]-player_pos[0])+abs(e["pos"][1]-player_pos[1])
-                if d<6 and random.random()<0.85:
-                    dx=player_pos[0]-e["pos"][0]
-                    dy=player_pos[1]-e["pos"][1]
-                    if abs(dx)>abs(dy): e["pos"][0]+=1 if dx>0 else -1
-                    else: e["pos"][1]+=1 if dy>0 else -1
+                # DESIGNATED MOVEMENT: Move in a 3x3 square pattern
+                # sequence: Right, Up, Left, Down
+                path = [(1,0), (1,0), (0,1), (0,1), (-1,0), (-1,0), (0,-1), (0,-1)]
+                move = path[e["step"] % len(path)]
+                e["pos"][0] += move[0]
+                e["pos"][1] += move[1]
+                e["step"] += 1
 
     def render(self, player_pos, history, battery, score):
         html="<div style='background:#000;padding:10px;border-radius:12px'>"
@@ -104,6 +108,8 @@ class MegaWorldEnv:
                 html+=f"<div style='width:22px;height:22px;background:{color};display:flex;align-items:center;justify-content:center'>{char}</div>"
         html+="</div></div>"
         return html
+
+# ... [Rest of the simulation and Gradio code remains the same] ...
 
 def run_mega_simulation(file):
     env=MegaWorldEnv()
@@ -161,7 +167,7 @@ def run_mega_simulation(file):
         time.sleep(0.05)
 
 with gr.Blocks() as demo:
-    gr.Markdown("# Super RL World — FINAL SOLVABLE VERSION")
+    gr.Markdown("# Super RL World — UPDATED CONFIGURATION")
     with gr.Row():
         game=gr.HTML(MegaWorldEnv().render((1,1),[],100,0))
         with gr.Column():
