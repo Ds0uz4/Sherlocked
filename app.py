@@ -14,7 +14,9 @@ RADAR_ENCODING = {"EMPTY": 0,"WALL": 1,"GOAL": 2,"ICE": 3,"MUD": 4,"DANGER": 5,"
 
 class MegaWorldEnv:
     def __init__(self):
-        self.start = (1, 1); self.goal = (18, 18)
+        self.start = (1, 1)
+        # CHANGE 1: Goal moved to absolute top right (19, 19)
+        self.goal = (19, 19) 
         self.walls = self._generate_walls()
         self.ice = [(5,y) for y in range(5,15)] + [(15,y) for y in range(5,15)]
         self.mud = [(x,10) for x in range(2,18)]
@@ -73,7 +75,7 @@ class MegaWorldEnv:
     def render(self, player_pos, history, battery, score):
         # HTML Visualizer
         html="<div style='background:#000;padding:10px;border-radius:12px;font-family:monospace'>"
-        html+=f"<div style='color:white;margin-bottom:5px'>🔋 {battery} | 🏆 {score:.1f}</div>" # Added .1f for float formatting
+        html+=f"<div style='color:white;margin-bottom:5px'>🔋 {battery} | 🏆 {score:.1f}</div>" 
         html+="<div style='display:grid;grid-template-columns:repeat(20,20px);gap:1px;width:fit-content;margin:auto'>"
         enemy_pos=[tuple(e["pos"]) for e in self.enemies]
         for y in range(19,-1,-1):
@@ -159,7 +161,6 @@ def run_mega_simulation(zip_file):
             pos = [nx, ny]
 
             # *** APPLY SHAPED REWARD ***
-            # This updates the score visible on screen
             step_reward = env.shaped_reward(tuple(prev_pos), tuple(pos))
             score += step_reward
 
@@ -187,7 +188,9 @@ def run_mega_simulation(zip_file):
 
             # Render
             yield env.render(tuple(pos), history, battery, score), {"step": step}
-            time.sleep(0.01)
+            
+            # CHANGE 2: Slower speed (0.15s delay per frame)
+            time.sleep(0.15) 
 
     finally:
         if temp_dir in sys.path:
