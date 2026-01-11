@@ -135,7 +135,7 @@ def run_mega_simulation(zip_file):
 
         # Run Simulation
         pos = list(env.start)
-        battery = 2500
+        battery = 200
         score = 0
         history = []
         
