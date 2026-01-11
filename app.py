@@ -153,7 +153,7 @@ def run_mega_simulation(file):
         if battery<=0 or tuple(pos) in [tuple(e["pos"]) for e in env.enemies]:
             reward-=20; done=True
         if tuple(pos)==env.goal:
-            reward+=1000; done=True
+            reward+=10000; done=True
 
         reward=max(reward,-10)
         score+=reward
