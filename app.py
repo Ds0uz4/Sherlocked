@@ -210,3 +210,4 @@ with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
 
 if __name__ == "__main__":
     demo.launch()
+# --- TRAINING SCRIPT SNIPPET FOR REFERENCE ---
