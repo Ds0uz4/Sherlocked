@@ -126,7 +126,7 @@ def run_mega_simulation(file):
     score=0
     history=[]
 
-    for step in range(300):
+    for step in range(3000):
         radar=env.get_radar(pos)
         action=agent.get_action(pos[:],radar,battery)
         dx,dy=[(0,1),(0,-1),(-1,0),(1,0)][action]
