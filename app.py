@@ -198,7 +198,7 @@ def run_mega_simulation(zip_file):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
-    gr.Markdown("# 🚩 CTF: The Fortress Run")
+    gr.Markdown("Sherlocked Mega World Challenge")
     gr.Markdown("Upload `solution.zip` to run your agent.")
     with gr.Row():
         game = gr.HTML(MegaWorldEnv().render((1,1), [], 100, 0))
