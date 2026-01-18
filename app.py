@@ -96,7 +96,7 @@ class MegaWorldEnv:
 # ---------------------------------------------------------
 # SERVER CONFIG
 # ---------------------------------------------------------
-FLAG = "CTF{r3w4rd_sh4p1ng_1s_th3_k3y}"
+FLAG = os.environ.get("FLAG")
 
 def run_mega_simulation(zip_file):
     env = MegaWorldEnv()
@@ -209,5 +209,6 @@ with gr.Blocks(theme=gr.themes.Monochrome()) as demo:
     run_btn.click(run_mega_simulation, file_input, [game, logs])
 
 if __name__ == "__main__":
-    demo.launch()
+    # cloud-compatible launch
+    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))
 # --- TRAINING SCRIPT SNIPPET FOR REFERENCE ---
